@@ -276,6 +276,7 @@ class Set:
     semanticType: Optional[str] = None
     description: Optional[str] = None
     choices: List[SetChoice] = field(default_factory=list)
+    padding = 0
 
     def encode(self, vals: Iterable[str]) -> int:
         vals = set(vals)
@@ -638,6 +639,10 @@ def _unpack_format(
 
         return _unpack_format(schema, type_.encodingType, '', buffer, buffer_cursor)
 
+    if isinstance(type_, RefType):
+        t = schema.types[type_.type]
+        return _unpack_format(schema, t, prefix, buffer, buffer_cursor)
+
     if isinstance(type_, Composite):
         return prefix + ''.join(_unpack_format(schema, t, '', buffer, buffer_cursor) for t in type_.types)
 
@@ -867,6 +872,14 @@ def _walk_fields_wrap_composite(
                     assert isinstance(t.encodingType, EnumEncodingType)
                     t1 = PrimitiveType(t.encodingType.value)
                     l = 1
+            elif isinstance(t, Set):
+                if isinstance(t.encodingType, Type):
+                    t1 = t.encodingType.primitiveType
+                    l = t.encodingType.length
+                else:
+                    assert isinstance(t.encodingType, SetEncodingType)
+                    t1 = PrimitiveType(t.encodingType.value)
+                    l = 1
             else:
                 assert isinstance(t, Type)
                 t1 = t.primitiveType
@@ -874,7 +887,7 @@ def _walk_fields_wrap_composite(
 
             cursor.val += t.padding
             if t1 == PrimitiveType.CHAR:
-                if l> 1:
+                if l > 1:
                     rv[t.name] = Pointer(cursor.val, str(l) + "s", l)
                     cursor.val += t.length
             else:
