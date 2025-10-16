@@ -700,6 +700,10 @@ def _unpack_composite(schema: Schema, composite: Composite, buffer: memoryview):
     return UnpackedValue(rv, size)
 
 def _prettify_type(_schema: Schema, t: Type, v):
+    if isinstance(t, RefType):
+        return _prettify_type(_schema, _schema.types[t.type], v)
+    if isinstance(t, Set):
+        return t.decode(v)
     if t.primitiveType == PrimitiveType.CHAR and (
         t.characterEncoding in (CharacterEncoding.ASCII, CharacterEncoding.US_ASCII) or t.characterEncoding is None
     ):
@@ -1029,6 +1033,10 @@ def _walk_fields_decode_composite(schema: Schema, rv: dict, composite: Composite
             rv[t.name] = {}
             _walk_fields_decode_composite(schema, rv[t.name], t, vals, cursor)
 
+        elif isinstance(t, RefType):
+            _t = _resolve_ref_type(t, composite)
+            _decode_value(schema, rv, t.name, _t, vals, cursor)
+
         else:
             if t.presence != Presence.CONSTANT:
                 _decode_value(schema, rv, t.name, t, vals, cursor)
@@ -1052,6 +1060,12 @@ def _walk_fields_decode(schema: Schema, rv: dict, fields: List[Union[Group, Fiel
         elif isinstance(f.type, Composite):
             rv[f.name] = {}
             _walk_fields_decode_composite(schema, rv[f.name], f.type, vals, cursor)
+
+        elif isinstance(f.type, PrimitiveType):
+            _decode_value(schema, rv, f.name, f.type, vals, cursor)
+
+        elif isinstance(f.type, RefType):
+            _decode_value(schema, rv, f.name, schema.types[f.type], vals, cursor)
 
         else:
             if f.type.presence != Presence.CONSTANT:
